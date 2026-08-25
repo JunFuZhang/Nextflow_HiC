@@ -60,7 +60,7 @@ process RUN_BIN3C {
     publishDir "${params.outdir}", mode: 'copy', saveAs: { filename -> "${sample_id}/bin3C/${filename}" }
 
     input:
-    tuple val(sample_id), path(bam)
+    tuple val(sample_id), path(bam), path(bai)
 
     output:
     path "bin3C_out/*", emit: bin3c_results
@@ -86,7 +86,7 @@ process RUN_JUICER_TOOLS {
     publishDir "${params.outdir}", mode: 'copy', saveAs: { filename -> "${sample_id}/juicer/${filename}" }
 
     input:
-    tuple val(sample_id), path(bam)
+    tuple val(sample_id), path(bam), path(bai)
     path chrom_sizes
 
     output:
