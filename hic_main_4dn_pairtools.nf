@@ -8,10 +8,12 @@ nextflow.enable.dsl=2
 
 // 定義輸入參數與預設值
 params.fastq_dir    = "/home/dhllove/NGS_DATA/HiC"
-params.reads        = "${params.fastq_dir}/*_R{1,2}_001.fastq"
+params.reads        = "${params.fastq_dir}/4DN/*_R{1,2}_001.fastq"
 params.fasta        = "/home/dhllove/NGS_DATA/reference_FASTA/Homo_sapiens_assembly38.fasta"
 params.outdir       = "/home/dhllove/Work/HiC"
 params.chrom_sizes  = "/home/dhllove/NGS_DATA/reference_FASTA/chrom.sizes"
+params.base_resolution = 10000
+params.cooler_resolutions = "10000,20000,50000,100000,250000,500000,1000000"
 params.sif1         = "/home/dhllove/DockerImage/bin3c_2.sif" // 指向包含工具鏈的 SIF 檔案
 params.sif2         = "/home/dhllove/DockerImage/pairtools.sif" // 指向包含工具鏈的 SIF 檔案
 params.sif3         = "/home/dhllove/DockerImage/juicer.sif" // 指向包含工具鏈的 SIF 檔案
@@ -121,7 +123,7 @@ process BUILD_COOLER {
 
     cooler zoomify \\
         --nproc ${task.cpus} \\
-        --resolutions 10000,25000,50000,100000,250000,500000,1000000 \\
+        --resolutions ${params.cooler_resolutions} \\
         --balance \\
         -o ${sample_id}.mcool \\
         ${sample_id}.${base_resolution}.cool
@@ -170,7 +172,7 @@ process RUN_JUICER_PRE {
     path chrom_sizes
 
     output:
-    path "${sample_id}.hic", emit: hic_matrix
+    tuple val(sample_id), path("${sample_id}.hic"), emit: hic_matrix
     path "loops/*", optional: true, emit: loops
     path "tads/*", optional: true, emit: tads
 
@@ -261,7 +263,7 @@ workflow {
       ================================================================
    """
     ch_reads = Channel.fromFilePairs(params.reads, checkIfExists: true)
-    //ch_fasta = Channel.fromPath(params.fasta, checkIfExists: true)
+    ch_fasta = Channel.fromPath(params.fasta, checkIfExists: true)
     ch_chrom_sizes = Channel.fromPath(params.chrom_sizes, checkIfExists: true)
 
     // 1. Alignment
@@ -271,7 +273,7 @@ workflow {
     )
     RUN_PAIRTOOLS(ALIGN_BWA.out.bam, ch_chrom_sizes)
     RUN_JUICER_PRE(RUN_PAIRTOOLS.out.valid_pairs, ch_chrom_sizes)
-    BUILD_COOLER(RUN_PAIRTOOLS.out.valid_pairs, ch_chrom_sizes, 10000)
+    BUILD_COOLER(RUN_PAIRTOOLS.out.valid_pairs, ch_chrom_sizes, params.base_resolution)
 
     RUN_COMPARTMENTS(BUILD_COOLER.out.mcool, ch_fasta, 100000)
 
