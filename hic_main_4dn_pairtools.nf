@@ -263,8 +263,8 @@ workflow {
       ================================================================
    """
     ch_reads = Channel.fromFilePairs(params.reads, checkIfExists: true)
-    ch_fasta = Channel.fromPath(params.fasta, checkIfExists: true)
-    ch_chrom_sizes = Channel.fromPath(params.chrom_sizes, checkIfExists: true)
+    ch_fasta = Channel.fromPath(params.fasta, checkIfExists: true).first()
+    ch_chrom_sizes = Channel.fromPath(params.chrom_sizes, checkIfExists: true).first()
 
     // 1. Alignment
     ALIGN_BWA(
