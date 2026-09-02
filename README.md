@@ -122,3 +122,10 @@ When submitting the Nextflow master script via `sbatch`, allocate minimal resour
 
 ### 3. Reference Index Locality
 Ensure reference FASTA paths are passed as string values (`val fasta`) rather than file objects (`path fasta`) inside process definitions when aligning with BWA. This prevents Nextflow from isolating only the `.fasta` file and allows tools to resolve index files located in the parent reference directory.
+
+### 4. Escaping Backslashes in Embedded Python/Bash Code
+Nextflow `script:` blocks that use `${}` interpolation are Groovy triple-double-quoted strings (`"""..."""`), which also interpret backslash escape sequences (`\n`, `\t`, etc.) **before** the embedded Python or bash code is ever written out. A literal `\n` intended for Python (e.g. inside an f-string) will instead be consumed by Groovy and converted into a real newline character, producing errors like:
+```
+SyntaxError: unterminated string literal
+```
+**Fix**: double every backslash meant for the embedded language — `\n` → `\\n`, `\t` → `\\t`, `\\` → `\\\\` — so Groovy leaves the literal escape sequence intact for Python/bash to interpret at runtime. This is easy to miss because it's silent unless the resulting raw character happens to break syntax (as `\n` does); a stray `\t` or similar can silently produce subtly wrong output without ever raising an error.
