@@ -129,3 +129,21 @@ Nextflow `script:` blocks that use `${}` interpolation are Groovy triple-double-
 SyntaxError: unterminated string literal
 ```
 **Fix**: double every backslash meant for the embedded language — `\n` → `\\n`, `\t` → `\\t`, `\\` → `\\\\` — so Groovy leaves the literal escape sequence intact for Python/bash to interpret at runtime. This is easy to miss because it's silent unless the resulting raw character happens to break syntax (as `\n` does); a stray `\t` or similar can silently produce subtly wrong output without ever raising an error.
+
+### 5. `RUN_PAIRTOOLS` Failing Late With `writer bzf_close: bug encountered`
+On long-running samples, `RUN_PAIRTOOLS` can fail near the very end of a multi-hour run with a bare `writer bzf_close: bug encountered` error from htslib's multithreaded bgzf writer, and exit code `140`. This is easy to misdiagnose as OOM, disk-full, or a corrupted input BAM — rule those out first via `sacct -j <jobid> --format=JobID,State,ExitCode,MaxRSS,Elapsed`, `df -h` on the work dir, and `samtools quickcheck` on the input BAM.
+
+If those all come back clean but `Elapsed` is long (many hours) relative to a low `MaxRSS`, the likely cause is that `pairtools sort`'s temporary chunk files were written to the NFS-mounted work directory (its default `--tmpdir` is the current working directory, and neither the process nor `nextflow.config` pins it elsewhere) rather than node-local disk. Sustained multi-threaded (`--nproc 24`) read/write I/O over a busy, shared NFS mount for many hours can hit a transient write hiccup — and htslib's threaded bgzf writer surfaces that as this opaque `bug encountered` panic instead of a legible I/O error.
+
+**Fix**: add `scratch true` to `RUN_PAIRTOOLS` so the task's working directory (and therefore `pairtools sort`'s default temp files) is staged on node-local disk instead of NFS, and pin `--tmpdir` explicitly as a second guarantee:
+```groovy
+withName: 'RUN_PAIRTOOLS' {
+    cpus   = 24
+    memory = '60 GB'
+    time   = '12h'
+    scratch = true
+    errorStrategy = { task.attempt <= 2 ? 'retry' : 'terminate' }
+    maxRetries    = 2
+}
+```
+Also keep `errorStrategy 'retry'` on this process as a safety net — since the failure is environment-driven rather than deterministic, a retry is often enough to clear it even before any config change takes effect.
